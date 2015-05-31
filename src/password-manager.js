@@ -3,7 +3,7 @@
 
 /********* External Imports ********/
 
-var lib = require("./lib");
+var lib = require("./lib/lib");
 
 var KDF = lib.KDF,
     HMAC = lib.HMAC,
