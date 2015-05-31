@@ -1,4 +1,4 @@
 crypto-proj
 ===========
 
-Projeto da disciplina *Introdução à Cryptografia Moderna* ([IF771](http://cin.ufpe.br/~ruy/crypto/)).
+*Introduction to Modern Cryptography* ([IF771](http://cin.ufpe.br/~ruy/crypto/)) course project at CIn, UFPE
