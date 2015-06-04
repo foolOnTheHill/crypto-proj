@@ -37,13 +37,27 @@ var KDF = lib.KDF,
 var keychain = function() {
   // Class-private instance variables.
   var priv = {
-    secrets: { /* Your secrets here */ },
-    data: { /* Non-secret data here */ }
+    secrets: {
+      version: "CS 255 Password Manager v1.0",
+      salt: undefined,
+      keys: {
+        AUTH: undefined,
+        HMAC: undefined,
+        GCM: undefined
+      }
+    },
+    data: { }
   };
 
-  // Maximum length of each record in bytes
-  var MAX_PW_LEN_BYTES = 64;
-  
+  // Password constants
+  var MAX_PW_LEN_BYTES = 64; // Maximum length of each record in bytes
+  var PADDING_LENGTH = 4;
+  var ENC_PW_LENGTH = MAX_PW_LEN_BYTES + PADDING_LENGTH + 1;
+
+  // Keys constants
+  var AES_KEY_LENGTH = 128;
+  var MAC_KEY_LENGTH = 256;
+
   // Flag to indicate whether password manager is "ready" or not
   var ready = false;
 
@@ -58,7 +72,24 @@ var keychain = function() {
     * Return Type: void
     */
   keychain.init = function(password) {
-    priv.data.version = "CS 255 Password Manager v1.0";
+    ready = false; // Blocks the Keychain
+
+    // Generates the salt
+    priv.secrets.salt = random_bitarray(AES_KEY_LENGTH);
+
+    // Derives a Master Key from 'password'
+    var masterKey = KDF(password, priv.secrets.salt);
+
+    // Generating the other keys
+    var hmacString = "bT2XHI7poJiBI0RqHIKN"; // Random strings to derive the keys
+    var authString = "icqjutMI3k80pmyhDjgy";
+    var gcmString = "Xjfx8KSD3vbIYP4Nm9PK";
+
+    priv.secrets.keys.HMAC = bitarray_slice(HMAC(masterKey, hmacString), 0, MAC_KEY_LENGTH);
+    priv.secrets.keys.AUTH = bitarray_slice(HMAC(masterKey, authString), 0, AES_KEY_LENGTH);
+    priv.secrets.keys.GCM = bitarray_slice(HMAC(masterKey, gcmString), 0, AES_KEY_LENGTH);
+
+    ready = true; // Keychain is ready
   };
 
   /**
@@ -125,7 +156,24 @@ var keychain = function() {
   * Return Type: void
   */
   keychain.set = function(name, value) {
-    throw "Not implemented!";
+    if (ready) {
+      // Keys
+      var K_HMAC = priv.secret.keys.HMAC;
+      var K_GCM = priv.secret.keys.GCM;
+
+      // Padding the value to 65 bytes. Preventing an adversary from learning any information about the password lengths.
+      var paddedPw = string_to_padded_bitarray(value, 0, MAX_PW_LEN_BYTES + 1);
+  
+      var domain = HMAC(K_HMAC, name);      
+      var signedPw = bitarray_concat(paddedPw, domain); // Signing the password to protect against swap attacks
+
+      var encPw = enc_gcm(setup_cipher(K_GCM), signedPw);
+
+      // Saves the data
+      priv.data[domain] = encPw;
+    } else {
+      throw "The keychain is not ready!";
+    }
   }
 
   /**
