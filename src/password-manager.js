@@ -150,7 +150,7 @@ var keychain = function() {
 
       if (priv.data.hasOwnProperty(domain)) { // Checks if the data exists
         var ciphertext = priv.data[domain];
-        var plaintext = dec_gcm(setup_cipher(K_GCM), encPw); // PaddedPw || HMAC_K(domain)
+        var plaintext = dec_gcm(setup_cipher(K_GCM), ciphertext); // PaddedPw || HMAC_K(domain)
 
         var paddedPw = bitarray_slice(plaintext, 0, 8 * ENC_PW_LENGTH);
         var password = string_from_padded_bitarray(paddedPw, MAX_PW_LEN_BYTES + 1); 
@@ -184,11 +184,11 @@ var keychain = function() {
   keychain.set = function(name, value) {
     if (ready) {
       // Keys
-      var K_HMAC = priv.secret.keys.HMAC;
-      var K_GCM = priv.secret.keys.GCM;
+      var K_HMAC = priv.secrets.keys.HMAC;
+      var K_GCM = priv.secrets.keys.GCM;
 
       // Padding the value to 65 bytes. Preventing an adversary from learning any information about the password lengths.
-      var paddedPw = string_to_padded_bitarray(value, 0, MAX_PW_LEN_BYTES + 1);
+      var paddedPw = string_to_padded_bitarray(value, MAX_PW_LEN_BYTES + 1);
   
       var domain = HMAC(K_HMAC, name);      
       var signedPw = bitarray_concat(paddedPw, domain); // Signing the password to protect against swap attacks
@@ -213,11 +213,11 @@ var keychain = function() {
   */
   keychain.remove = function(name) {
     if (ready) {
-      var K_HMAC = priv.secret.keys.HMAC;
+      var K_HMAC = priv.secrets.keys.HMAC;
       var domain = HMAC(K_HMAC, name);
 
       if (priv.data.hasOwnProperty(domain)) { // Checks if the data exists
-        delete priv.data[domain];
+        delete priv.data[domain];             // and then deletes it
         return true;
       } else {
         return false;
