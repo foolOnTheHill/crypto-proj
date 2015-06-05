@@ -127,7 +127,23 @@ var keychain = function() {
     * Return Type: array
     */ 
   keychain.dump = function() {
-    throw "Not implemented!";
+    if (ready) {
+      // Authentication
+      var K_AUTH = priv.secrets.keys.AUTH;
+      var signature = enc_gcm(setup_cipher(K_AUTH), string_to_bitarray("AUTH_SIGNATURE"));
+
+      // JSON serialization
+      var parsedData = JSON.parse(JSON.stringify(priv.data));
+      parsedData["salt"] = priv.secrets.salt; // Is a random value and then should be included in the serialization
+      parsedData["signature"] = signature;
+
+      // Integrity
+      var checksum = SHA256(string_to_bitarray(JSON.stringify(parsedData)));
+
+      return [parsedData, checksum];
+    } else {
+      return null;
+    }
   }
 
   /**
