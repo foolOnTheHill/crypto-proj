@@ -141,7 +141,33 @@ var keychain = function() {
     * Return Type: string
     */
   keychain.get = function(name) {
-    throw "Not implemented!";
+    if (ready) {
+      // Keys
+      var K_HMAC = priv.secrets.keys.HMAC;
+      var K_GCM = priv.secrets.keys.GCM;
+
+      var domain = HMAC(K_HMAC, name);
+
+      if (priv.data.hasOwnProperty(domain)) { // Checks if the data exists
+        var ciphertext = priv.data[domain];
+        var plaintext = dec_gcm(setup_cipher(K_GCM), encPw); // PaddedPw || HMAC_K(domain)
+
+        var paddedPw = bitarray_slice(plaintext, 0, 8 * ENC_PW_LENGTH);
+        var password = string_from_padded_bitarray(paddedPw, MAX_PW_LEN_BYTES + 1); 
+        
+        var signature = bitarray_slice(plaintext, 8 * ENC_PW_LENGTH, bitarray_len(plaintext));
+
+        if (bitarray_equal(domain, signature)) {
+          return password;
+        } else {
+          throw "Swap Attack detected in '"+domain+"'!";
+        }
+      } else {
+        return null;
+      }
+    } else {
+      throw "The keychain is not ready!";
+    }
   }
 
   /** 
@@ -186,7 +212,19 @@ var keychain = function() {
     * Return Type: boolean
   */
   keychain.remove = function(name) {
-    throw "Not implemented!";
+    if (ready) {
+      var K_HMAC = priv.secret.keys.HMAC;
+      var domain = HMAC(K_HMAC, name);
+
+      if (priv.data.hasOwnProperty(domain)) { // Checks if the data exists
+        delete priv.data[domain];
+        return true;
+      } else {
+        return false;
+      }
+    } else {
+      throw "The keychain is not ready!";
+    }
   }
 
   return keychain;
