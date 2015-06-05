@@ -58,6 +58,11 @@ var keychain = function() {
   var AES_KEY_LENGTH = 128;
   var MAC_KEY_LENGTH = 256;
 
+  // Random strings to derive the keys
+  var hmacString = "bT2XHI7poJiBI0RqHIKN";
+  var authString = "icqjutMI3k80pmyhDjgy";
+  var gcmString = "Xjfx8KSD3vbIYP4Nm9PK";
+
   // Flag to indicate whether password manager is "ready" or not
   var ready = false;
 
@@ -81,10 +86,6 @@ var keychain = function() {
     var masterKey = KDF(password, priv.secrets.salt);
 
     // Generating the other keys
-    var hmacString = "bT2XHI7poJiBI0RqHIKN"; // Random strings to derive the keys
-    var authString = "icqjutMI3k80pmyhDjgy";
-    var gcmString = "Xjfx8KSD3vbIYP4Nm9PK";
-
     priv.secrets.keys.HMAC = bitarray_slice(HMAC(masterKey, hmacString), 0, MAC_KEY_LENGTH);
     priv.secrets.keys.AUTH = bitarray_slice(HMAC(masterKey, authString), 0, AES_KEY_LENGTH);
     priv.secrets.keys.GCM = bitarray_slice(HMAC(masterKey, gcmString), 0, AES_KEY_LENGTH);
@@ -110,7 +111,50 @@ var keychain = function() {
     * Return Type: boolean
     */
   keychain.load = function(password, repr, trusted_data_check) {
-    throw "Not implemented!";
+    ready = false;
+
+    var data = JSON.parse(repr);
+    var salt = data["salt"]; 
+    
+    var masterKey = KDF(password, salt);
+    
+    // Authentication check
+    var K_AUTH = bitarray_slice(HMAC(masterKey, authString), 0, AES_KEY_LENGTH);
+    var signature = data["signature"];
+    var signaturePlaintext;
+
+    try {
+      signaturePlaintext = dec_gcm(setup_cipher(K_AUTH), signature);
+    } catch(e) {
+      return false; // Provided a invalid signature and failed for authentication.
+    }
+
+    if (!bitarray_equal(signaturePlaintext, string_to_bitarray("AUTH_SIGNATURE"))) { // Provided the incorrect signature and failed for authentication.
+      return false;
+    }
+
+    // Rollback attacks check
+    if (trusted_data_check){
+      var checksum = SHA256(string_to_bitarray(repr));
+      if (!bitarray_equal(checksum, trusted_data_check)) {
+        throw "The provided data does not correspond to the trusted check. Possibly a Rollback Attack.";
+      }
+    } 
+
+    // No tampering detected, so we retrieve all the secrets and save the data
+    priv.secrets.salt = salt;
+
+    priv.secrets.keys.AUTH = K_AUTH;
+    priv.secrets.keys.HMAC = bitarray_slice(HMAC(masterKey, hmacString), 0, MAC_KEY_LENGTH);
+    priv.secrets.keys.GCM = bitarray_slice(HMAC(masterKey, gcmString), 0, AES_KEY_LENGTH);
+
+    delete data["salt"];
+    delete data["signature"];
+    priv.data = data;
+
+    ready = true;
+
+    return true;
   };
 
   /**
@@ -136,11 +180,12 @@ var keychain = function() {
       var parsedData = JSON.parse(JSON.stringify(priv.data));
       parsedData["salt"] = priv.secrets.salt; // Is a random value and then should be included in the serialization
       parsedData["signature"] = signature;
+      var serialization = JSON.stringify(parsedData);
 
       // Integrity
-      var checksum = SHA256(string_to_bitarray(JSON.stringify(parsedData)));
+      var checksum = SHA256(string_to_bitarray(serialization));
 
-      return [parsedData, checksum];
+      return [serialization, checksum];
     } else {
       return null;
     }
